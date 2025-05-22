@@ -5,6 +5,7 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
+    "postbuild": "mkdir dist\\data 2>nul & copy src\\data\\*.json dist\\data\\ >nul",
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
     "watch": "ts-node-dev --respawn src/index.ts"

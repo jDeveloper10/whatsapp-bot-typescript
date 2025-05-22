@@ -1,0 +1,52 @@
+{
+    "roles": {
+        "miembro": {
+            "name": "Miembro",
+            "rules": [
+                "Respetar a todos los miembros del grupo",
+                "No compartir contenido inapropiado",
+                "No hacer spam",
+                "Mantener las conversaciones relacionadas al tema del grupo",
+                "No compartir información personal de otros miembros"
+            ]
+        }
+    },
+    "ranks": {
+        "cabo": {
+            "name": "Cabo",
+            "emoji": "🔰",
+            "minMessages": 0,
+            "maxMessages": 99
+        },
+        "teniente": {
+            "name": "Teniente",
+            "emoji": "⭐",
+            "minMessages": 100,
+            "maxMessages": 199
+        },
+        "capitan": {
+            "name": "Capitán",
+            "emoji": "⭐⭐",
+            "minMessages": 200,
+            "maxMessages": 349
+        },
+        "mayor": {
+            "name": "Mayor",
+            "emoji": "⭐⭐⭐",
+            "minMessages": 350,
+            "maxMessages": 499
+        },
+        "coronel": {
+            "name": "Coronel",
+            "emoji": "🎖️",
+            "minMessages": 500,
+            "maxMessages": 699
+        },
+        "general": {
+            "name": "General",
+            "emoji": "👑",
+            "minMessages": 700,
+            "maxMessages": 999999
+        }
+    }
+}
