@@ -1,8 +1,8 @@
 {
     "50768246752": {
-        "messageCount": 40,
+        "messageCount": 31,
         "groupsActivity": {
-            "120363159757555887@g.us": 28
+            "120363159757555887@g.us": 21
         }
     },
     "51962544456": {
@@ -24,27 +24,9 @@
         }
     },
     "573105897117": {
-        "messageCount": 4,
-        "groupsActivity": {
-            "120363159757555887@g.us": 4
-        }
-    },
-    "593967412641": {
         "messageCount": 1,
         "groupsActivity": {
             "120363159757555887@g.us": 1
-        }
-    },
-    "18294807894": {
-        "messageCount": 1,
-        "groupsActivity": {
-            "120363159757555887@g.us": 1
-        }
-    },
-    "5213921061890": {
-        "messageCount": 5,
-        "groupsActivity": {
-            "120363159757555887@g.us": 5
         }
     }
 }
