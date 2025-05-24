@@ -53,7 +53,22 @@ const path = __importStar(require("path"));
 const os = __importStar(require("os"));
 const axios_1 = __importDefault(require("axios"));
 // Configurar ffmpeg con el path correcto
-fluent_ffmpeg_1.default.setFfmpegPath(ffmpeg_1.path);
+try {
+    console.log('Configurando ffmpeg path:', ffmpeg_1.path);
+    fluent_ffmpeg_1.default.setFfmpegPath(ffmpeg_1.path);
+}
+catch (error) {
+    console.error('Error al configurar ffmpeg:', error);
+    // Intentar con path alternativo
+    const altPath = path.join(__dirname, '..', '..', 'node_modules', '@ffmpeg-installer', 'ffmpeg', 'ffmpeg.exe');
+    if (fs.existsSync(altPath)) {
+        console.log('Usando path alternativo para ffmpeg:', altPath);
+        fluent_ffmpeg_1.default.setFfmpegPath(altPath);
+    }
+    else {
+        console.error('No se pudo encontrar el ejecutable de ffmpeg');
+    }
+}
 // Función para crear directorio temporal si no existe
 const getTempDir = () => {
     const tempDir = path.join(os.tmpdir(), 'whatsapp-stickers');
@@ -118,6 +133,7 @@ const downloadMediaWithTimeout = (msg) => __awaiter(void 0, void 0, void 0, func
 const command = {
     name: 'sticker',
     description: 'Convierte una imagen en sticker. Responde a un mensaje con una imagen y usa "@bot sticker"',
+    privateOnly: true,
     execute: (msg) => __awaiter(void 0, void 0, void 0, function* () {
         var _a, _b, _c, _d;
         let tempFilePath = null;

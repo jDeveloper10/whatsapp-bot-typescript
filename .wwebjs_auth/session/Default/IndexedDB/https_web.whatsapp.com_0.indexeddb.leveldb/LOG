@@ -1,0 +1,30 @@
+2025/05/24-13:28:23.515 48fc Reusing MANIFEST E:\botwhatsapp2\.wwebjs_auth\session\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
+2025/05/24-13:28:23.515 48fc Recovering log #133
+2025/05/24-13:28:23.614 48fc Reusing old log E:\botwhatsapp2\.wwebjs_auth\session\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/000133.log 
+2025/05/24-13:28:25.341 5298 Level-0 table #140: started
+2025/05/24-13:28:25.454 5298 Level-0 table #140: 800627 bytes OK
+2025/05/24-13:28:25.485 5298 Delete type=0 #133
+2025/05/24-13:28:25.486 5298 Manual compaction at level-0 from '\x00\x1f\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00 \x00\x00\x00' @ 0 : 0; will stop at (end)
+2025/05/24-13:28:27.215 32f4 Compacting 1@1 + 3@2 files
+2025/05/24-13:28:27.411 32f4 Generated table #141@1: 41912 keys, 2210705 bytes
+2025/05/24-13:28:27.592 32f4 Generated table #142@1: 13715 keys, 2187466 bytes
+2025/05/24-13:28:27.790 32f4 Generated table #143@1: 55948 keys, 1926905 bytes
+2025/05/24-13:28:27.790 32f4 Compacted 1@1 + 3@2 files => 6325076 bytes
+2025/05/24-13:28:27.808 32f4 compacted to: files[ 0 0 3 0 0 0 0 ]
+2025/05/24-13:28:27.808 32f4 Delete type=2 #135
+2025/05/24-13:28:27.808 32f4 Delete type=2 #136
+2025/05/24-13:28:27.808 32f4 Delete type=2 #137
+2025/05/24-13:28:27.808 32f4 Delete type=2 #140
+2025/05/24-13:29:31.836 52c4 Level-0 table #145: started
+2025/05/24-13:29:31.952 52c4 Level-0 table #145: 928252 bytes OK
+2025/05/24-13:29:31.972 52c4 Delete type=0 #139
+2025/05/24-13:29:32.260 52c4 Compacting 1@1 + 3@2 files
+2025/05/24-13:29:32.554 52c4 Generated table #146@1: 43246 keys, 2210941 bytes
+2025/05/24-13:29:32.783 52c4 Generated table #147@1: 12305 keys, 2184587 bytes
+2025/05/24-13:29:33.154 52c4 Generated table #148@1: 59002 keys, 2060060 bytes
+2025/05/24-13:29:33.154 52c4 Compacted 1@1 + 3@2 files => 6455588 bytes
+2025/05/24-13:29:33.210 52c4 compacted to: files[ 0 0 3 0 0 0 0 ]
+2025/05/24-13:29:33.211 52c4 Delete type=2 #141
+2025/05/24-13:29:33.211 52c4 Delete type=2 #142
+2025/05/24-13:29:33.211 52c4 Delete type=2 #143
+2025/05/24-13:29:33.211 52c4 Delete type=2 #145

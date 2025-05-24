@@ -7,7 +7,20 @@ import * as os from 'os';
 import axios from 'axios';
 
 // Configurar ffmpeg con el path correcto
-ffmpeg.setFfmpegPath(ffmpegPath);
+try {
+    console.log('Configurando ffmpeg path:', ffmpegPath);
+    ffmpeg.setFfmpegPath(ffmpegPath);
+} catch (error) {
+    console.error('Error al configurar ffmpeg:', error);
+    // Intentar con path alternativo
+    const altPath = path.join(__dirname, '..', '..', 'node_modules', '@ffmpeg-installer', 'ffmpeg', 'ffmpeg.exe');
+    if (fs.existsSync(altPath)) {
+        console.log('Usando path alternativo para ffmpeg:', altPath);
+        ffmpeg.setFfmpegPath(altPath);
+    } else {
+        console.error('No se pudo encontrar el ejecutable de ffmpeg');
+    }
+}
 
 // Función para crear directorio temporal si no existe
 const getTempDir = () => {
@@ -28,6 +41,27 @@ const cleanupTempFiles = (filePath: string) => {
     } catch (error) {
         console.error('Error al eliminar archivo temporal:', error);
     }
+};
+
+// Función para procesar video a sticker
+const processVideoToSticker = async (inputPath: string, outputPath: string): Promise<void> => {
+    return new Promise((resolve, reject) => {
+        ffmpeg(inputPath)
+            .setFfmpegPath(ffmpegPath)
+            .inputOptions(['-t 3']) // Limitar a 3 segundos
+            .outputOptions([
+                '-vf scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:white',
+                '-vcodec libwebp',
+                '-loop 0',
+                '-preset picture',
+                '-an',
+                '-vsync 0',
+                '-s 512:512'
+            ])
+            .save(outputPath)
+            .on('end', () => resolve())
+            .on('error', (err) => reject(err));
+    });
 };
 
 // Función para descargar medio con timeout y reintentos
@@ -85,27 +119,23 @@ const downloadMediaWithTimeout = async (msg: Message): Promise<MessageMedia | nu
 
 const command: WhatsAppBot.Command = {
     name: 'sticker',
-    description: 'Convierte una imagen en sticker. Responde a un mensaje con una imagen y usa "@bot sticker"',
+    description: 'Convierte una imagen o video en sticker. Responde a un mensaje con una imagen/video y usa "@bot sticker"',
+    privateOnly: true,
     execute: async (msg: Message) => {
         let tempFilePath: string | null = null;
+        let outputPath: string | null = null;
         let statusMsg: Message | null = null;
 
         try {
-            if (!msg.hasQuotedMsg) {
-                await msg.reply('❌ Debes responder a una imagen con este comando');
-                return;
-            }
-
-            const quotedMsg = await msg.getQuotedMessage();
-
-            if (!quotedMsg.hasMedia) {
-                await msg.reply('❌ El mensaje al que respondes debe contener una imagen');
-                return;
-            }
-
-            // Verificación temprana del tipo de medio
-            if (quotedMsg.type === 'video') {
-                await msg.reply('❌ Los videos no están soportados. Por favor, envía una imagen para convertirla en sticker.');
+            // Obtener el chat y los últimos mensajes
+            const chat = await msg.getChat();
+            const messages = await chat.fetchMessages({ limit: 5 });
+            
+            // Buscar el último mensaje con medio
+            const lastMediaMessage = messages.find(m => m.hasMedia);
+            
+            if (!lastMediaMessage) {
+                await msg.reply('❌ No se encontró ningún mensaje con imagen o video reciente. Por favor, envía o responde a una imagen/video.');
                 return;
             }
 
@@ -120,14 +150,10 @@ const command: WhatsAppBot.Command = {
 
                 while (attempts < maxAttempts && !media) {
                     console.log(`Intento ${attempts + 1} de descargar medio...`);
-                    media = await downloadMediaWithTimeout(quotedMsg);
+                    media = await downloadMediaWithTimeout(lastMediaMessage);
 
                     if (!media) {
                         attempts++;
-                        // Si llevamos más de un intento, probablemente sea un video
-                        if (attempts > 1) {
-                            throw new Error('Parece ser un video. Los stickers solo pueden crearse a partir de imágenes.');
-                        }
                         if (attempts === maxAttempts) {
                             throw new Error('No se pudo descargar el medio después de varios intentos');
                         }
@@ -142,17 +168,26 @@ const command: WhatsAppBot.Command = {
                 // Actualizar mensaje de estado
                 await statusMsg.edit('⚙️ Procesando...');
 
-                // Verificar que sea una imagen
-                const mediaType = media.mimetype.split('/')[0];
-                if (mediaType !== 'image') {
-                    throw new Error('Solo se pueden crear stickers a partir de imágenes. Los videos no están soportados.');
-                }
-
                 // Guardar el medio temporalmente
                 const tempDir = getTempDir();
                 const fileExt = media.mimetype.split('/')[1];
                 tempFilePath = path.join(tempDir, `sticker_${Date.now()}.${fileExt}`);
                 fs.writeFileSync(tempFilePath, Buffer.from(media.data, 'base64'));
+
+                // Procesar el medio según su tipo
+                if (lastMediaMessage.type === 'video') {
+                    console.log('Procesando video...');
+                    outputPath = path.join(tempDir, `sticker_${Date.now()}.webp`);
+                    await processVideoToSticker(tempFilePath, outputPath);
+                    
+                    // Leer el archivo procesado
+                    const processedData = fs.readFileSync(outputPath);
+                    media = new MessageMedia(
+                        'image/webp',
+                        processedData.toString('base64'),
+                        'sticker.webp'
+                    );
+                }
 
                 // Enviar el sticker
                 await msg.reply(media, undefined, {
@@ -162,13 +197,6 @@ const command: WhatsAppBot.Command = {
                     stickerCategories: ['🤖']
                 });
 
-                // Intentar eliminar el mensaje original si tenemos permiso
-                try {
-                    await quotedMsg.delete(true);
-                } catch (deleteError) {
-                    console.log('No se pudo eliminar el mensaje original:', deleteError);
-                }
-
                 // Eliminar mensaje de estado
                 if (statusMsg) {
                     await statusMsg.delete(true);
@@ -177,31 +205,18 @@ const command: WhatsAppBot.Command = {
             } catch (mediaError: any) {
                 console.error('Error procesando medio:', mediaError);
                 if (statusMsg) {
-                    if (mediaError?.message?.includes('Parece ser un video')) {
-                        await statusMsg.edit('❌ Los videos no están soportados. Por favor, envía una imagen para convertirla en sticker.');
-                    } else if (mediaError?.message?.includes('videos no están soportados')) {
-                        await statusMsg.edit('❌ Solo se pueden crear stickers a partir de imágenes. Los videos no están soportados.');
-                    } else {
-                        await statusMsg.edit('❌ Error al procesar el medio. Por favor, intenta de nuevo.');
-                    }
+                    await statusMsg.edit('❌ Error al procesar el medio. Por favor, intenta de nuevo.');
                 }
                 throw mediaError;
             }
 
         } catch (error: any) {
             console.error('Error creating sticker:', error);
-            if (!statusMsg ||
-                error?.message?.includes('videos no están soportados') ||
-                error?.message?.includes('Parece ser un video')) {
-                await msg.reply('❌ Los videos no están soportados. Por favor, envía una imagen para convertirla en sticker.');
-            } else {
-                await msg.reply('❌ No se pudo crear el sticker. Por favor, intenta de nuevo con otra imagen.');
-            }
+            await msg.reply('❌ No se pudo crear el sticker. Por favor, intenta de nuevo con otra imagen o video.');
         } finally {
             // Limpiar archivos temporales
-            if (tempFilePath) {
-                cleanupTempFiles(tempFilePath);
-            }
+            if (tempFilePath) cleanupTempFiles(tempFilePath);
+            if (outputPath) cleanupTempFiles(outputPath);
         }
     }
 };
