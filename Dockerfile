@@ -54,8 +54,6 @@ RUN npm ci
 # Copiar el código fuente
 COPY . .
 
-# Compilar el proyecto TypeScript
-RUN npm run build
 
 # Comando para ejecutar el bot
 CMD ["npm", "start"] 
