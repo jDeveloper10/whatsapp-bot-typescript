@@ -120,7 +120,6 @@ const downloadMediaWithTimeout = async (msg: Message): Promise<MessageMedia | nu
 const command: WhatsAppBot.Command = {
     name: 'sticker',
     description: 'Convierte una imagen o video en sticker. Responde a un mensaje con una imagen/video y usa "@bot sticker"',
-    privateOnly: true,
     execute: async (msg: Message) => {
         let tempFilePath: string | null = null;
         let outputPath: string | null = null;

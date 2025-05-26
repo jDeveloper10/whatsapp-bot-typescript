@@ -7,6 +7,9 @@ import { IntentParser } from '../utils/intentParser';
 import { MessageValidation } from '../utils/messageValidation';
 import rankService from '../services/rankService';
 import { config } from '../config/config';
+import axios from 'axios';
+import * as FormData from 'form-data';
+import ReminderService from '../services/reminderService';
 
 class CommandHandler {
     private commands: Map<string, WhatsAppBot.Command>;
@@ -16,6 +19,7 @@ class CommandHandler {
     private readonly client: Client;
     private readonly saludos = ['hola', 'hi', 'hello', 'ola', 'hey', 'buenas', 'buenos días', 'buenas tardes', 'buenas noches'];
     private readonly agradecimientos = ['gracias', 'thanks', 'thank you', 'ty', 'thx', 'muchas gracias', 'te agradezco'];
+    private reminderService: ReminderService;
 
     constructor(client: Client) {
         this.client = client;
@@ -24,6 +28,7 @@ class CommandHandler {
         this.loadCommands();
         this.intentParser = new IntentParser(Array.from(this.commands.keys()));
         this.messageValidation = new MessageValidation(client);
+        this.reminderService = new ReminderService(client);
 
         client.on('ready', () => {
             if (client.info.wid) {
@@ -154,7 +159,8 @@ class CommandHandler {
 
             console.log('Processing message:', {
                 type: validation.type,
-                cleanMessage: validation.cleanMessage
+                cleanMessage: validation.cleanMessage,
+                messageType: msg.type
             });
 
             // Registrar actividad del usuario
@@ -171,8 +177,66 @@ class CommandHandler {
             // Manejar saludos y agradecimientos
             if (await this.handleGreetingAndThanks(msg, validation)) return;
 
-            // Si el mensaje está vacío
-            if (!validation.cleanMessage.trim()) {
+            // Manejar mensajes de audio privados primero
+            if (msg.type === 'ptt' && validation.type === 'private') {
+                console.log('Mensaje de audio detectado, descargando media...');
+                const media = await msg.downloadMedia();
+                if (media) {
+                    console.log('Media descargada, guardando temporalmente...');
+                    const tempPath = `temp_${Date.now()}.ogg`;
+                    fs.writeFileSync(tempPath, Buffer.from(media.data, 'base64'));
+                    console.log('Archivo temporal guardado en:', tempPath);
+                    
+                    try {
+                        const text = await this.transcribeAudio(tempPath);
+                        console.log('Texto transcrito:', text);
+                        fs.unlinkSync(tempPath);
+                        console.log('Archivo temporal eliminado');
+
+                        // Analizar si es un recordatorio
+                        if (text.toLowerCase().includes('recuérdame')) {
+                            console.log('Recordatorio detectado en el texto');
+                            const { datetime, reminderText } = this.reminderService.parseReminderText(text);
+                            console.log('Fecha detectada:', datetime);
+                            console.log('Texto del recordatorio:', reminderText);
+                            
+                            if (datetime) {
+                                const sender = await msg.getContact();
+                                this.reminderService.addReminder(
+                                    sender.id._serialized,
+                                    reminderText,
+                                    datetime
+                                );
+                                
+                                const formattedDate = datetime.toLocaleString('es-ES', {
+                                    weekday: 'long',
+                                    year: 'numeric',
+                                    month: 'long',
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                });
+                                
+                                await msg.reply(`✅ *Recordatorio guardado*\n\n📝 *Texto:* ${reminderText}\n⏰ *Fecha:* ${formattedDate}`);
+                            } else {
+                                await msg.reply('❌ No pude entender la fecha/hora del recordatorio. Por favor, sé más específico (ejemplo: "recuérdame mañana a las 3pm comer")');
+                            }
+                        } else {
+                            await msg.reply(`Transcripción: ${text}`);
+                        }
+                    } catch (error) {
+                        console.error('Error procesando el audio:', error);
+                        await msg.reply('❌ Lo siento, hubo un error procesando tu audio. Por favor, intenta de nuevo.');
+                    }
+                } else {
+                    console.log('No se pudo descargar el media');
+                    await msg.reply('❌ Lo siento, no pude procesar tu audio. Por favor, intenta de nuevo.');
+                }
+                return;
+            }
+
+            // Si el mensaje está vacío y no es un audio
+            if (!validation.cleanMessage.trim() && msg.type !== 'ptt') {
                 const helpMessage = validation.type === 'group'
                     ? "¿En qué puedo ayudarte? Mencióname y escribe 'ayuda' para ver los comandos disponibles."
                     : "¡Hola! Escribe 'ayuda' para ver los comandos disponibles.";
@@ -233,6 +297,24 @@ class CommandHandler {
         } catch (error) {
             const finalError = error instanceof Error ? error : new Error(String(error));
             await errorHandler.handleError(finalError, { message: msg });
+        }
+    }
+
+    private async transcribeAudio(filePath: string): Promise<string> {
+        try {
+            console.log('Iniciando transcripción de audio:', filePath);
+            const formData = new FormData();
+            formData.append('audio', fs.createReadStream(filePath));
+            console.log('Enviando audio al servidor de transcripción...');
+            const response = await axios.post('http://localhost:5005/transcribe', formData, {
+                headers: formData.getHeaders(),
+                maxBodyLength: Infinity
+            });
+            console.log('Transcripción recibida:', response.data);
+            return response.data.text;
+        } catch (error) {
+            console.error('Error en transcripción:', error);
+            throw error;
         }
     }
 
