@@ -1,6 +1,6 @@
 FROM node:18-slim
 
-# Instalar dependencias de Puppeteer
+# Instalar dependencias de Puppeteer y Python
 RUN apt-get update && apt-get install -y \
     chromium \
     libatk-bridge2.0-0 \
@@ -36,6 +36,8 @@ RUN apt-get update && apt-get install -y \
     libxext6 \
     libxi6 \
     libxrender1 \
+    python3 \
+    python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
 # Configurar Chromium para Puppeteer
@@ -47,13 +49,20 @@ WORKDIR /app
 # Copiar los archivos del proyecto
 COPY package*.json ./
 COPY tsconfig.json ./
+COPY requirements.txt ./
 
-# Instalar dependencias
+# Instalar dependencias de Node.js y Python
 RUN npm ci
+RUN pip3 install -r requirements.txt
 
 # Copiar el código fuente
 COPY . .
 
+# Crear directorio dist/data
+RUN mkdir -p dist/data
+
+# Compilar el proyecto TypeScript
+RUN npm run build
 
 # Comando para ejecutar el bot
 CMD ["npm", "start"] 
