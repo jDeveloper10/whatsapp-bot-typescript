@@ -1,3 +1,5 @@
 flask==2.0.1
-openai-whisper==20231117
+openai-whisper
+openai
+pydub
 torch==2.1.0 
