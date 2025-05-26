@@ -61,8 +61,7 @@ COPY . .
 # Crear directorio dist/data
 RUN mkdir -p dist/data
 
-# Compilar el proyecto TypeScript
-RUN npm run build
+
 
 # Comando para ejecutar el bot
 CMD ["npm", "start"] 
