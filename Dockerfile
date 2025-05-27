@@ -53,7 +53,7 @@ COPY requirements.txt ./
 
 # Instalar dependencias de Node.js y Python
 RUN npm install
-RUN pip3 install -r requirements.txt
+Run requirments.txt
 
 # Copiar el código fuente
 COPY . .
