@@ -47,12 +47,12 @@ ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 WORKDIR /app
 
 # Copiar los archivos del proyecto
-COPY package*.json ./
+COPY package.json package-lock.json ./
 COPY tsconfig.json ./
 COPY requirements.txt ./
 
 # Instalar dependencias de Node.js y Python
-RUN npm ci
+RUN npm install
 RUN pip3 install -r requirements.txt
 
 # Copiar el código fuente
@@ -60,7 +60,6 @@ COPY . .
 
 # Crear directorio dist/data
 RUN mkdir -p dist/data
-
 
 
 # Comando para ejecutar el bot
