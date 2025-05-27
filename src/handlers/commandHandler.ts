@@ -10,6 +10,7 @@ import { config } from '../config/config';
 import axios from 'axios';
 import * as FormData from 'form-data';
 import ReminderService from '../services/reminderService';
+import { GeminiService } from '../services/geminiService';
 
 class CommandHandler {
     private commands: Map<string, WhatsAppBot.Command>;
@@ -177,66 +178,8 @@ class CommandHandler {
             // Manejar saludos y agradecimientos
             if (await this.handleGreetingAndThanks(msg, validation)) return;
 
-            // Manejar mensajes de audio privados primero
-            if (msg.type === 'ptt' && validation.type === 'private') {
-                console.log('Mensaje de audio detectado, descargando media...');
-                const media = await msg.downloadMedia();
-                if (media) {
-                    console.log('Media descargada, guardando temporalmente...');
-                    const tempPath = `temp_${Date.now()}.ogg`;
-                    fs.writeFileSync(tempPath, Buffer.from(media.data, 'base64'));
-                    console.log('Archivo temporal guardado en:', tempPath);
-                    
-                    try {
-                        const text = await this.transcribeAudio(tempPath);
-                        console.log('Texto transcrito:', text);
-                        fs.unlinkSync(tempPath);
-                        console.log('Archivo temporal eliminado');
-
-                        // Analizar si es un recordatorio
-                        if (text.toLowerCase().includes('recuérdame')) {
-                            console.log('Recordatorio detectado en el texto');
-                            const { datetime, reminderText } = this.reminderService.parseReminderText(text);
-                            console.log('Fecha detectada:', datetime);
-                            console.log('Texto del recordatorio:', reminderText);
-                            
-                            if (datetime) {
-                                const sender = await msg.getContact();
-                                this.reminderService.addReminder(
-                                    sender.id._serialized,
-                                    reminderText,
-                                    datetime
-                                );
-                                
-                                const formattedDate = datetime.toLocaleString('es-ES', {
-                                    weekday: 'long',
-                                    year: 'numeric',
-                                    month: 'long',
-                                    day: 'numeric',
-                                    hour: '2-digit',
-                                    minute: '2-digit'
-                                });
-                                
-                                await msg.reply(`✅ *Recordatorio guardado*\n\n📝 *Texto:* ${reminderText}\n⏰ *Fecha:* ${formattedDate}`);
-                            } else {
-                                await msg.reply('❌ No pude entender la fecha/hora del recordatorio. Por favor, sé más específico (ejemplo: "recuérdame mañana a las 3pm comer")');
-                            }
-                        } else {
-                            await msg.reply(`Transcripción: ${text}`);
-                        }
-                    } catch (error) {
-                        console.error('Error procesando el audio:', error);
-                        await msg.reply('❌ Lo siento, hubo un error procesando tu audio. Por favor, intenta de nuevo.');
-                    }
-                } else {
-                    console.log('No se pudo descargar el media');
-                    await msg.reply('❌ Lo siento, no pude procesar tu audio. Por favor, intenta de nuevo.');
-                }
-                return;
-            }
-
-            // Si el mensaje está vacío y no es un audio
-            if (!validation.cleanMessage.trim() && msg.type !== 'ptt') {
+            // Si el mensaje está vacío
+            if (!validation.cleanMessage.trim()) {
                 const helpMessage = validation.type === 'group'
                     ? "¿En qué puedo ayudarte? Mencióname y escribe 'ayuda' para ver los comandos disponibles."
                     : "¡Hola! Escribe 'ayuda' para ver los comandos disponibles.";
@@ -246,45 +189,26 @@ class CommandHandler {
 
             // Procesar comando
             const intentResult = this.intentParser.analyzeIntent(validation.cleanMessage);
-            if (!intentResult.command) {
-                if (intentResult.suggestion) {
-                    const suggestionMsg = validation.type === 'group'
-                        ? `¿Quisiste decir "${intentResult.suggestion}"? Puedes usar el comando mencionándome y diciendo "${intentResult.suggestion}"`
-                        : `¿Quisiste decir "${intentResult.suggestion}"? Puedes usar el comando escribiendo "${intentResult.suggestion}"`;
-                    await msg.reply(suggestionMsg);
-                } else {
-                    await msg.reply('No entendí qué comando deseas ejecutar. Escribe "ayuda" para ver la lista de comandos disponibles.');
+            
+            if (intentResult.command) {
+                const command = this.commands.get(intentResult.command);
+                if (command) {
+                    await command.execute(msg, intentResult.args);
+                    return;
                 }
-                return;
             }
 
-            const command = this.commands.get(intentResult.command);
-            if (!command) return;
-
-            // Validar restricciones del comando
-            if (command.groupOnly && validation.type !== 'group') {
-                await msg.reply('❌ Este comando solo puede ser usado en grupos.');
-                return;
+            // Si no es un comando, procesar con Gemini
+            try {
+                const response = await GeminiService.generateResponse(validation.cleanMessage);
+                await msg.reply(response);
+            } catch (error) {
+                console.error('Error al procesar con Gemini:', error);
+                await msg.reply('Lo siento, hubo un error al procesar tu mensaje. Por favor, intenta nuevamente.');
             }
-
-            if (command.privateOnly && validation.type !== 'private') {
-                await msg.reply('❌ Este comando solo puede ser usado en chat privado.');
-                return;
-            }
-
-            if (command.adminOnly && !(await this.isAdmin(msg))) {
-                await msg.reply('❌ Este comando es solo para administradores.');
-                return;
-            }
-
-            // Ejecutar comando
-            const args = validation.cleanMessage.split(/\s+/).slice(1);
-            await this.executeCommand(intentResult.command, msg, args);
-
         } catch (error) {
-            console.error('Error in handleMessage:', error);
-            const finalError = error instanceof Error ? error : new Error(String(error));
-            await errorHandler.handleError(finalError, { message: msg });
+            console.error('Error en handleMessage:', error);
+            await errorHandler.handleError(error as Error, { message: msg });
         }
     }
 

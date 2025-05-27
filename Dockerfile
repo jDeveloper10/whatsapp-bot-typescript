@@ -54,13 +54,14 @@ COPY requirements.txt ./
 # Instalar dependencias de Node.js y Python
 RUN npm install
 
-
 # Copiar el código fuente
 COPY . .
 
 # Crear directorio dist/data
 RUN mkdir -p dist/data
 
+# Exponer el puerto para el servidor Express
+EXPOSE 3001
 
-# Comando para ejecutar el bot
+# Comando para ejecutar el bot y el servidor
 CMD ["npm", "start"] 
