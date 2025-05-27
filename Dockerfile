@@ -53,7 +53,7 @@ COPY requirements.txt ./
 
 # Instalar dependencias de Node.js y Python
 RUN npm install
-Run requirments.txt
+
 
 # Copiar el código fuente
 COPY . .
