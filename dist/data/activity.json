@@ -1,8 +1,9 @@
 {
     "50768246752": {
-        "messageCount": 44,
+        "messageCount": 45,
         "groupsActivity": {
-            "120363159757555887@g.us": 24
+            "120363159757555887@g.us": 21,
+            "status@broadcast": 1
         }
     },
     "51962544456": {
@@ -29,8 +30,10 @@
             "120363159757555887@g.us": 1
         }
     },
-    "50762584795": {
+    "50763518800": {
         "messageCount": 1,
-        "groupsActivity": {}
+        "groupsActivity": {
+            "status@broadcast": 1
+        }
     }
 }

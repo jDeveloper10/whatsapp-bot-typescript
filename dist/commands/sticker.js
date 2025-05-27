@@ -89,6 +89,26 @@ const cleanupTempFiles = (filePath) => {
         console.error('Error al eliminar archivo temporal:', error);
     }
 };
+// Función para procesar video a sticker
+const processVideoToSticker = (inputPath, outputPath) => __awaiter(void 0, void 0, void 0, function* () {
+    return new Promise((resolve, reject) => {
+        (0, fluent_ffmpeg_1.default)(inputPath)
+            .setFfmpegPath(ffmpeg_1.path)
+            .inputOptions(['-t 3']) // Limitar a 3 segundos
+            .outputOptions([
+            '-vf scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:white',
+            '-vcodec libwebp',
+            '-loop 0',
+            '-preset picture',
+            '-an',
+            '-vsync 0',
+            '-s 512:512'
+        ])
+            .save(outputPath)
+            .on('end', () => resolve())
+            .on('error', (err) => reject(err));
+    });
+});
 // Función para descargar medio con timeout y reintentos
 const downloadMediaWithTimeout = (msg) => __awaiter(void 0, void 0, void 0, function* () {
     const maxAttempts = 3;
@@ -132,25 +152,19 @@ const downloadMediaWithTimeout = (msg) => __awaiter(void 0, void 0, void 0, func
 });
 const command = {
     name: 'sticker',
-    description: 'Convierte una imagen en sticker. Responde a un mensaje con una imagen y usa "@bot sticker"',
-    privateOnly: true,
+    description: 'Convierte una imagen o video en sticker. Responde a un mensaje con una imagen/video y usa "@bot sticker"',
     execute: (msg) => __awaiter(void 0, void 0, void 0, function* () {
-        var _a, _b, _c, _d;
         let tempFilePath = null;
+        let outputPath = null;
         let statusMsg = null;
         try {
-            if (!msg.hasQuotedMsg) {
-                yield msg.reply('❌ Debes responder a una imagen con este comando');
-                return;
-            }
-            const quotedMsg = yield msg.getQuotedMessage();
-            if (!quotedMsg.hasMedia) {
-                yield msg.reply('❌ El mensaje al que respondes debe contener una imagen');
-                return;
-            }
-            // Verificación temprana del tipo de medio
-            if (quotedMsg.type === 'video') {
-                yield msg.reply('❌ Los videos no están soportados. Por favor, envía una imagen para convertirla en sticker.');
+            // Obtener el chat y los últimos mensajes
+            const chat = yield msg.getChat();
+            const messages = yield chat.fetchMessages({ limit: 5 });
+            // Buscar el último mensaje con medio
+            const lastMediaMessage = messages.find(m => m.hasMedia);
+            if (!lastMediaMessage) {
+                yield msg.reply('❌ No se encontró ningún mensaje con imagen o video reciente. Por favor, envía o responde a una imagen/video.');
                 return;
             }
             // Enviar mensaje de estado
@@ -162,13 +176,9 @@ const command = {
                 const maxAttempts = 3;
                 while (attempts < maxAttempts && !media) {
                     console.log(`Intento ${attempts + 1} de descargar medio...`);
-                    media = yield downloadMediaWithTimeout(quotedMsg);
+                    media = yield downloadMediaWithTimeout(lastMediaMessage);
                     if (!media) {
                         attempts++;
-                        // Si llevamos más de un intento, probablemente sea un video
-                        if (attempts > 1) {
-                            throw new Error('Parece ser un video. Los stickers solo pueden crearse a partir de imágenes.');
-                        }
                         if (attempts === maxAttempts) {
                             throw new Error('No se pudo descargar el medio después de varios intentos');
                         }
@@ -180,16 +190,20 @@ const command = {
                 }
                 // Actualizar mensaje de estado
                 yield statusMsg.edit('⚙️ Procesando...');
-                // Verificar que sea una imagen
-                const mediaType = media.mimetype.split('/')[0];
-                if (mediaType !== 'image') {
-                    throw new Error('Solo se pueden crear stickers a partir de imágenes. Los videos no están soportados.');
-                }
                 // Guardar el medio temporalmente
                 const tempDir = getTempDir();
                 const fileExt = media.mimetype.split('/')[1];
                 tempFilePath = path.join(tempDir, `sticker_${Date.now()}.${fileExt}`);
                 fs.writeFileSync(tempFilePath, Buffer.from(media.data, 'base64'));
+                // Procesar el medio según su tipo
+                if (lastMediaMessage.type === 'video') {
+                    console.log('Procesando video...');
+                    outputPath = path.join(tempDir, `sticker_${Date.now()}.webp`);
+                    yield processVideoToSticker(tempFilePath, outputPath);
+                    // Leer el archivo procesado
+                    const processedData = fs.readFileSync(outputPath);
+                    media = new whatsapp_web_js_1.MessageMedia('image/webp', processedData.toString('base64'), 'sticker.webp');
+                }
                 // Enviar el sticker
                 yield msg.reply(media, undefined, {
                     sendMediaAsSticker: true,
@@ -197,13 +211,6 @@ const command = {
                     stickerAuthor: 'Programming Group Bot',
                     stickerCategories: ['🤖']
                 });
-                // Intentar eliminar el mensaje original si tenemos permiso
-                try {
-                    yield quotedMsg.delete(true);
-                }
-                catch (deleteError) {
-                    console.log('No se pudo eliminar el mensaje original:', deleteError);
-                }
                 // Eliminar mensaje de estado
                 if (statusMsg) {
                     yield statusMsg.delete(true);
@@ -212,35 +219,21 @@ const command = {
             catch (mediaError) {
                 console.error('Error procesando medio:', mediaError);
                 if (statusMsg) {
-                    if ((_a = mediaError === null || mediaError === void 0 ? void 0 : mediaError.message) === null || _a === void 0 ? void 0 : _a.includes('Parece ser un video')) {
-                        yield statusMsg.edit('❌ Los videos no están soportados. Por favor, envía una imagen para convertirla en sticker.');
-                    }
-                    else if ((_b = mediaError === null || mediaError === void 0 ? void 0 : mediaError.message) === null || _b === void 0 ? void 0 : _b.includes('videos no están soportados')) {
-                        yield statusMsg.edit('❌ Solo se pueden crear stickers a partir de imágenes. Los videos no están soportados.');
-                    }
-                    else {
-                        yield statusMsg.edit('❌ Error al procesar el medio. Por favor, intenta de nuevo.');
-                    }
+                    yield statusMsg.edit('❌ Error al procesar el medio. Por favor, intenta de nuevo.');
                 }
                 throw mediaError;
             }
         }
         catch (error) {
             console.error('Error creating sticker:', error);
-            if (!statusMsg ||
-                ((_c = error === null || error === void 0 ? void 0 : error.message) === null || _c === void 0 ? void 0 : _c.includes('videos no están soportados')) ||
-                ((_d = error === null || error === void 0 ? void 0 : error.message) === null || _d === void 0 ? void 0 : _d.includes('Parece ser un video'))) {
-                yield msg.reply('❌ Los videos no están soportados. Por favor, envía una imagen para convertirla en sticker.');
-            }
-            else {
-                yield msg.reply('❌ No se pudo crear el sticker. Por favor, intenta de nuevo con otra imagen.');
-            }
+            yield msg.reply('❌ No se pudo crear el sticker. Por favor, intenta de nuevo con otra imagen o video.');
         }
         finally {
             // Limpiar archivos temporales
-            if (tempFilePath) {
+            if (tempFilePath)
                 cleanupTempFiles(tempFilePath);
-            }
+            if (outputPath)
+                cleanupTempFiles(outputPath);
         }
     })
 };

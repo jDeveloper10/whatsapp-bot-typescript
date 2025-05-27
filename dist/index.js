@@ -53,6 +53,8 @@ const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const coursePromoService_1 = require("./services/coursePromoService");
 const promover_1 = require("./commands/promover");
+const express_1 = __importDefault(require("express"));
+const QRCode = __importStar(require("qrcode"));
 // Initialize WhatsApp client with required configurations
 const client = new whatsapp_web_js_1.Client({
     authStrategy: new whatsapp_web_js_1.LocalAuth(),
@@ -61,10 +63,28 @@ const client = new whatsapp_web_js_1.Client({
         args: ['--no-sandbox', '--disable-setuid-sandbox']
     }
 });
+let lastQr = null;
+// Servidor Express para mostrar el QR
+const app = (0, express_1.default)();
+const PORT = process.env.PORT || 3000;
+app.get('/', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    if (!lastQr) {
+        return res.send('<h2>QR no generado aún. Espera unos segundos y recarga.</h2>');
+    }
+    const qrImage = yield QRCode.toDataURL(lastQr);
+    res.send(`
+      <h2>Escanea este QR para iniciar sesión en WhatsApp Web:</h2>
+      <img src="${qrImage}" />
+    `);
+}));
+app.listen(PORT, () => {
+    console.log(`Web de QR disponible en http://localhost:${PORT} o en Railway en el puerto asignado.`);
+});
 // QR Code generation event
 client.on('qr', (qr) => {
+    lastQr = qr;
     qrcode_terminal_1.default.generate(qr, { small: true });
-    console.log('QR Code generated. Scan it with WhatsApp to log in.');
+    console.log('QR Code generado. Escanéalo en la web pública de Railway o en local.');
 });
 // Ready event
 client.on('ready', () => {

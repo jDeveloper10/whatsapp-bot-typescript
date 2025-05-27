@@ -52,6 +52,10 @@ const intentParser_1 = require("../utils/intentParser");
 const messageValidation_1 = require("../utils/messageValidation");
 const rankService_1 = __importDefault(require("../services/rankService"));
 const config_1 = require("../config/config");
+const axios_1 = __importDefault(require("axios"));
+const form_data_1 = __importDefault(require("form-data"));
+const reminderService_1 = __importDefault(require("../services/reminderService"));
+const geminiService_1 = require("../services/geminiService");
 class CommandHandler {
     constructor(client) {
         this.saludos = ['hola', 'hi', 'hello', 'ola', 'hey', 'buenas', 'buenos días', 'buenas tardes', 'buenas noches'];
@@ -62,6 +66,7 @@ class CommandHandler {
         this.loadCommands();
         this.intentParser = new intentParser_1.IntentParser(Array.from(this.commands.keys()));
         this.messageValidation = new messageValidation_1.MessageValidation(client);
+        this.reminderService = new reminderService_1.default(client);
         client.on('ready', () => {
             if (client.info.wid) {
                 console.log('Setting bot JID from:', client.info.wid._serialized);
@@ -179,7 +184,8 @@ class CommandHandler {
                     return;
                 console.log('Processing message:', {
                     type: validation.type,
-                    cleanMessage: validation.cleanMessage
+                    cleanMessage: validation.cleanMessage,
+                    messageType: msg.type
                 });
                 // Registrar actividad del usuario
                 try {
@@ -205,42 +211,31 @@ class CommandHandler {
                 }
                 // Procesar comando
                 const intentResult = this.intentParser.analyzeIntent(validation.cleanMessage);
-                if (!intentResult.command) {
-                    if (intentResult.suggestion) {
-                        const suggestionMsg = validation.type === 'group'
-                            ? `¿Quisiste decir "${intentResult.suggestion}"? Puedes usar el comando mencionándome y diciendo "${intentResult.suggestion}"`
-                            : `¿Quisiste decir "${intentResult.suggestion}"? Puedes usar el comando escribiendo "${intentResult.suggestion}"`;
-                        yield msg.reply(suggestionMsg);
+                if (intentResult.command) {
+                    const command = this.commands.get(intentResult.command);
+                    if (command) {
+                        yield command.execute(msg, [validation.cleanMessage]);
+                        return;
+                    }
+                }
+                // Si no es comando, usa Gemini para responder
+                try {
+                    const geminiResponse = yield geminiService_1.GeminiService.generateResponse(validation.cleanMessage);
+                    if (geminiResponse) {
+                        yield msg.reply(geminiResponse);
                     }
                     else {
-                        yield msg.reply('No entendí qué comando deseas ejecutar. Escribe "ayuda" para ver la lista de comandos disponibles.');
+                        yield msg.reply("No entendí qué comando deseas ejecutar. Escribe \"ayuda\" para ver la lista de comandos disponibles.");
                     }
-                    return;
                 }
-                const command = this.commands.get(intentResult.command);
-                if (!command)
-                    return;
-                // Validar restricciones del comando
-                if (command.groupOnly && validation.type !== 'group') {
-                    yield msg.reply('❌ Este comando solo puede ser usado en grupos.');
-                    return;
+                catch (error) {
+                    console.error('Error al obtener respuesta de Gemini:', error);
+                    yield msg.reply("Ocurrió un error al procesar tu mensaje con la IA.");
                 }
-                if (command.privateOnly && validation.type !== 'private') {
-                    yield msg.reply('❌ Este comando solo puede ser usado en chat privado.');
-                    return;
-                }
-                if (command.adminOnly && !(yield this.isAdmin(msg))) {
-                    yield msg.reply('❌ Este comando es solo para administradores.');
-                    return;
-                }
-                // Ejecutar comando
-                const args = validation.cleanMessage.split(/\s+/).slice(1);
-                yield this.executeCommand(intentResult.command, msg, args);
             }
             catch (error) {
-                console.error('Error in handleMessage:', error);
-                const finalError = error instanceof Error ? error : new Error(String(error));
-                yield errorHandler_1.default.handleError(finalError, { message: msg });
+                console.error('Error en handleMessage:', error);
+                yield errorHandler_1.default.handleError(error, { message: msg });
             }
         });
     }
@@ -255,6 +250,26 @@ class CommandHandler {
             catch (error) {
                 const finalError = error instanceof Error ? error : new Error(String(error));
                 yield errorHandler_1.default.handleError(finalError, { message: msg });
+            }
+        });
+    }
+    transcribeAudio(filePath) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                console.log('Iniciando transcripción de audio:', filePath);
+                const formData = new form_data_1.default();
+                formData.append('audio', fs.createReadStream(filePath));
+                console.log('Enviando audio al servidor de transcripción...');
+                const response = yield axios_1.default.post('http://localhost:5005/transcribe', formData, {
+                    headers: formData.getHeaders(),
+                    maxBodyLength: Infinity
+                });
+                console.log('Transcripción recibida:', response.data);
+                return response.data.text;
+            }
+            catch (error) {
+                console.error('Error en transcripción:', error);
+                throw error;
             }
         });
     }
