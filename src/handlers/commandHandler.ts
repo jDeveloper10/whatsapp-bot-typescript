@@ -8,7 +8,7 @@ import { MessageValidation } from '../utils/messageValidation';
 import rankService from '../services/rankService';
 import { config } from '../config/config';
 import axios from 'axios';
-import * as FormData from 'form-data';
+import FormData from 'form-data';
 import ReminderService from '../services/reminderService';
 import { GeminiService } from '../services/geminiService';
 
@@ -193,18 +193,22 @@ class CommandHandler {
             if (intentResult.command) {
                 const command = this.commands.get(intentResult.command);
                 if (command) {
-                    await command.execute(msg, intentResult.args);
+                    await command.execute(msg, [validation.cleanMessage]);
                     return;
                 }
             }
 
-            // Si no es un comando, procesar con Gemini
+            // Si no es comando, usa Gemini para responder
             try {
-                const response = await GeminiService.generateResponse(validation.cleanMessage);
-                await msg.reply(response);
+                const geminiResponse = await GeminiService.generateResponse(validation.cleanMessage);
+                if (geminiResponse) {
+                    await msg.reply(geminiResponse);
+                } else {
+                    await msg.reply("No entendí qué comando deseas ejecutar. Escribe \"ayuda\" para ver la lista de comandos disponibles.");
+                }
             } catch (error) {
-                console.error('Error al procesar con Gemini:', error);
-                await msg.reply('Lo siento, hubo un error al procesar tu mensaje. Por favor, intenta nuevamente.');
+                console.error('Error al obtener respuesta de Gemini:', error);
+                await msg.reply("Ocurrió un error al procesar tu mensaje con la IA.");
             }
         } catch (error) {
             console.error('Error en handleMessage:', error);
